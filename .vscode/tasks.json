@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Create TabPage Component",
+			"type": "shell",
+			"command": "echo @using Microsoft.AspNetCore.Components > BlazorApp/Components/TabPage.razor && echo. >> BlazorApp/Components/TabPage.razor && echo @if (Parent.ActivePage == this) { >> BlazorApp/Components/TabPage.razor && echo     @ChildContent >> BlazorApp/Components/TabPage.razor && echo } >> BlazorApp/Components/TabPage.razor && echo. >> BlazorApp/Components/TabPage.razor && echo @code { >> BlazorApp/Components/TabPage.razor && echo     [CascadingParameter] >> BlazorApp/Components/TabPage.razor && echo     public TabView Parent { get; set; } = default!; >> BlazorApp/Components/TabPage.razor && echo. >> BlazorApp/Components/TabPage.razor && echo     [Parameter] >> BlazorApp/Components/TabPage.razor && echo     public string Title { get; set; } = string.Empty; >> BlazorApp/Components/TabPage.razor && echo. >> BlazorApp/Components/TabPage.razor && echo     [Parameter] >> BlazorApp/Components/TabPage.razor && echo     public RenderFragment? ChildContent { get; set; } >> BlazorApp/Components/TabPage.razor && echo } >> BlazorApp/Components/TabPage.razor"
+		}
+	]
+}

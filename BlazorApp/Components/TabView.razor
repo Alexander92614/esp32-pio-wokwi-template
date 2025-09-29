@@ -1,0 +1,61 @@
+@using Microsoft.AspNetCore.Components
+
+<div class="card">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" role="tablist">
+            @foreach (var page in Pages)
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link @(page == ActivePage ? "active" : "")"
+                            @onclick="() => ActivatePage(page)"
+                            type="button"
+                            role="tab"
+                            aria-selected="@(page == ActivePage)">
+                        @(page.Title)
+                    </button>
+                </li>
+            }
+        </ul>
+    </div>
+    <div class="card-body tab-content">
+        <CascadingValue Value="this">
+            @ChildContent
+        </CascadingValue>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    public TabPage? ActivePage { get; set; }
+    public List<TabPage> Pages { get; set; } = new();
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (Pages.Count > 0)
+            {
+                ActivePage = Pages[0];
+                StateHasChanged();
+            }
+        }
+    }
+
+    internal void AddPage(TabPage page)
+    {
+        Pages.Add(page);
+        if (Pages.Count == 1)
+        {
+            ActivePage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void ActivatePage(TabPage page)
+    {
+        ActivePage = page;
+        StateHasChanged();
+    }
+}

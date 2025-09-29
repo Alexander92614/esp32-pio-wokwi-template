@@ -1,0 +1,393 @@
+@page "/events"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject WebSocketService WebSocket
+
+<PageTitle>Control de LEDs</PageTitle>
+
+<div class="container mt-4">
+    @if (isLoading)
+    {
+        <div class="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+            <div class="spinner-border text-light" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i> @errorMessage
+            <button type="button" class="btn-close" @onclick="@(() => errorMessage = null)"></button>
+        </div>
+    }
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-lightbulb-fill"></i> LED 1 (Azul)
+                </div>
+                <div class="card-body">
+                    <button class="btn @(led1State ? "btn-warning" : "btn-primary") w-100" @onclick="ToggleLed1">
+                        <i class="bi @(led1State ? "bi-lightbulb-fill" : "bi-lightbulb")"></i>
+                        @(led1State ? "Apagar" : "Encender") LED 1
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-lightbulb-fill"></i> LED 2 (Verde)
+                </div>
+                <div class="card-body">
+                    <button class="btn @(led2State ? "btn-warning" : "btn-success") w-100" @onclick="ToggleLed2">
+                        <i class="bi @(led2State ? "bi-lightbulb-fill" : "bi-lightbulb")"></i>
+                        @(led2State ? "Apagar" : "Encender") LED 2
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Historial de Actividad</h5>
+                <div>
+                    <button class="btn btn-sm btn-danger me-2" @onclick="DeleteAllEvents">
+                        <i class="bi bi-trash"></i> Eliminar Todo
+                    </button>
+                    <button class="btn btn-sm btn-light" @onclick="ReloadEvents">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="list-group list-group-flush">
+            @if (events == null)
+            {
+                <div class="list-group-item text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            }
+            else if (!events.Any())
+            {
+                <div class="list-group-item text-center text-muted">
+                    <i class="bi bi-info-circle"></i> No hay registros de actividad
+                </div>
+            }
+            else
+            {
+                @foreach (var ev in events.OrderByDescending(e => e.Timestamp))
+                {
+                    @if (!string.IsNullOrEmpty(ev.Command) && ev.Command.Contains("LED"))
+                    {
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    @if (ev.Command.Contains("LED1"))
+                                    {
+                                        <i class="bi bi-lightbulb-fill text-primary"></i>
+                                        <span class="fw-bold text-primary ms-2">LED Azul</span>
+                                    }
+                                    else if (ev.Command.Contains("LED2"))
+                                    {
+                                        <i class="bi bi-lightbulb-fill text-success"></i>
+                                        <span class="fw-bold text-success ms-2">LED Verde</span>
+                                    }
+                                    <span class="ms-2">
+                                        @if (ev.Command.Contains("ON"))
+                                        {
+                                            <span class="badge bg-success">Encendido</span>
+                                        }
+                                        else if (ev.Command.Contains("OFF"))
+                                        {
+                                            <span class="badge bg-danger">Apagado</span>
+                                        }
+                                    </span>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <small class="text-muted me-3">@FormatDate(ev.Timestamp)</small>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteEvent(ev.Id)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    public class EventRecord
+    {
+        public int Id { get; set; }
+        public string Timestamp { get; set; } = string.Empty;
+        public string Command { get; set; } = string.Empty;
+    }
+
+    private string FormatDate(string timestamp)
+    {
+        if (DateTime.TryParse(timestamp, out var dt))
+            return dt.ToString("HH:mm:ss dd/MM/yyyy");
+        return timestamp;
+    }
+
+    List<EventRecord>? events;
+    bool led1State = false;
+    bool led2State = false;
+
+    [Parameter]
+    public string? Error { get; set; }
+
+    private string? errorMessage;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await ReloadEvents();
+            WebSocket.MessageReceived += HandleWebSocketMessage;
+            WebSocket.ConnectionClosed += HandleWebSocketClosed;
+            WebSocket.ConnectionError += HandleWebSocketError;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error al inicializar: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async void HandleWebSocketClosed()
+    {
+        try
+        {
+            await InvokeAsync(() => {
+                errorMessage = "Conexión WebSocket cerrada. Intentando reconectar...";
+                StateHasChanged();
+            });
+            await Task.Delay(5000); // Espera 5 segundos antes de intentar reconectar
+            await WebSocket.ConnectAsync();
+        }
+        catch (Exception ex)
+        {
+            await InvokeAsync(() => {
+                errorMessage = $"Error al reconectar: {ex.Message}";
+                StateHasChanged();
+            });
+        }
+    }
+
+    private async void HandleWebSocketError(string error)
+    {
+        await InvokeAsync(() => {
+            errorMessage = $"Error en WebSocket: {error}";
+            StateHasChanged();
+        });
+    }
+
+    private async void HandleWebSocketMessage(string message)
+    {
+        try
+        {
+            if (message.Contains("update") || message.Contains("add") || message.Contains("delete"))
+            {
+                await InvokeAsync(ReloadEvents);
+            }
+        }
+        catch (Exception ex)
+        {
+            await InvokeAsync(() => {
+                errorMessage = $"Error al procesar mensaje: {ex.Message}";
+                StateHasChanged();
+            });
+        }
+    }
+
+    private async Task ReloadEvents()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            StateHasChanged();
+
+            var response = await Http.GetAsync("http://localhost:5000/events");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                events = System.Text.Json.JsonSerializer.Deserialize<List<EventRecord>>(json);
+                errorMessage = null;
+            }
+            else
+            {
+                errorMessage = $"Error al cargar eventos: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error al cargar eventos: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleLed1()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            StateHasChanged();
+            
+            led1State = !led1State;
+            
+            // Primero enviamos el comando al ESP32
+            await WebSocket.SendAsync("TOGGLE_1");
+            
+            // Luego guardamos el evento con información más detallada
+            var command = $"LED1_{(led1State ? "ON" : "OFF")}";
+            var content = new StringContent(
+                System.Text.Json.JsonSerializer.Serialize(new { command }), 
+                System.Text.Encoding.UTF8, 
+                "application/json"
+            );
+            var response = await Http.PostAsync("http://localhost:5000/events/add", content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"Error al guardar el evento: {response.StatusCode}");
+            }
+            
+            await ReloadEvents();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error al controlar LED1: {ex.Message}";
+            led1State = !led1State; // Revertir el estado
+            StateHasChanged();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleLed2()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            StateHasChanged();
+            
+            led2State = !led2State;
+            
+            // Primero enviamos el comando al ESP32
+            await WebSocket.SendAsync("TOGGLE_2");
+            
+            // Luego guardamos el evento con información más detallada
+            var command = $"LED2_{(led2State ? "ON" : "OFF")}";
+            var content = new StringContent(
+                System.Text.Json.JsonSerializer.Serialize(new { command }), 
+                System.Text.Encoding.UTF8, 
+                "application/json"
+            );
+            var response = await Http.PostAsync("http://localhost:5000/events/add", content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"Error al guardar el evento: {response.StatusCode}");
+            }
+            
+            await ReloadEvents();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error al controlar LED2: {ex.Message}";
+            led2State = !led2State; // Revertir el estado
+            StateHasChanged();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteEvent(int id)
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            StateHasChanged();
+            
+            var response = await Http.DeleteAsync($"http://localhost:5000/events/delete/{id}");
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"Error al eliminar el evento: {response.StatusCode}");
+            }
+            await ReloadEvents();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error al eliminar el evento: {ex.Message}";
+            StateHasChanged();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteAllEvents()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            StateHasChanged();
+            
+            // Primero eliminamos la base de datos
+            var deleteResponse = await Http.PostAsync("http://localhost:5000/events/delete", null);
+            if (!deleteResponse.IsSuccessStatusCode)
+            {
+                throw new Exception($"Error al eliminar los eventos: {deleteResponse.StatusCode}");
+            }
+
+            // Luego recreamos la base de datos
+            var createResponse = await Http.PostAsync("http://localhost:5000/events/create", null);
+            if (!createResponse.IsSuccessStatusCode)
+            {
+                throw new Exception($"Error al recrear la base de datos: {createResponse.StatusCode}");
+            }
+
+            await ReloadEvents();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error al eliminar los eventos: {ex.Message}";
+            StateHasChanged();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,85 @@
+@page "/"
+@inject WebSocketService WebSocketService
+@implements IDisposable
+
+<PageTitle>ESP32 Control</PageTitle>
+
+<style>
+    .btn {
+        background-color: #5B5;
+        border: none;
+        color: #fff;
+        padding: 0.5em 1em;
+        font-size: 2em;
+        text-decoration: none;
+        cursor: pointer;
+        min-width: 200px;
+    }
+
+    .btn.OFF {
+        background-color: #333;
+    }
+</style>
+
+<h1>ESP32 WebSocket Control</h1>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; grid-auto-flow: column; grid-gap: 1em; max-width: 500px;">
+    <h2>LED 1</h2>
+    <button class="@led1CssClass" @onclick="() => ToggleLED(1)">@led1Text</button>
+    
+    <h2>LED 2</h2>
+    <button class="@led2CssClass" @onclick="() => ToggleLED(2)">@led2Text</button>
+</div>
+
+<p>@statusText</p>
+
+@code {
+    private string led1Text = "LED 1 OFF";
+    private string led2Text = "LED 2 OFF";
+    private string led1CssClass = "btn OFF";
+    private string led2CssClass = "btn OFF";
+
+    private string statusText = "Connecting to server...";
+
+    protected override async Task OnInitializedAsync()
+    {
+        WebSocketService.MessageReceived += OnMessageReceived;
+        await WebSocketService.ConnectAsync();
+        statusText = "Connected!";
+    }
+
+    private async Task ToggleLED(int ledNum)
+    {
+        await WebSocketService.SendAsync($"TOGGLE_{ledNum}");
+    }
+
+    private void OnMessageReceived(string message)
+    {
+        bool isLed1 = message.StartsWith("LED1_");
+        bool isLed2 = message.StartsWith("LED2_");
+
+        if (isLed1 || isLed2)
+        {
+            bool isOn = message.EndsWith("_ON");
+            if (isLed1)
+            {
+                led1Text = isOn ? "LED 1 ON" : "LED 1 OFF";
+                led1CssClass = isOn ? "btn" : "btn OFF";
+            }
+            else
+            {
+                led2Text = isOn ? "LED 2 ON" : "LED 2 OFF";
+                led2CssClass = isOn ? "btn" : "btn OFF";
+            }
+            
+            // We need to call StateHasChanged because the message is received
+            // on a background thread and Blazor needs to be notified to re-render.
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose()
+    {
+        WebSocketService.MessageReceived -= OnMessageReceived;
+    }
+}

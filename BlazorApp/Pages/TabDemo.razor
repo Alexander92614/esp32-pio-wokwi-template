@@ -1,0 +1,208 @@
+@page "/tab-demo"
+@using BlazorApp.Components
+
+<h3>Tab Component Demo</h3>
+
+<TabView>
+    <TabPage Title="Control">
+        <h4>Control de LEDs</h4>
+        <div class="mb-3">
+            <button class="btn btn-primary me-2 @(led1State ? "active" : "")" @onclick="ToggleLed1">
+                LED 1 (@(led1State ? "ON" : "OFF"))
+            </button>
+            <button class="btn btn-secondary @(led2State ? "active" : "")" @onclick="ToggleLed2">
+                LED 2 (@(led2State ? "ON" : "OFF"))
+            </button>
+        </div>
+        <div class="alert alert-info">
+            Estado de la conexión: @(isConnected ? "Conectado" : "Desconectado")
+        </div>
+    </TabPage>
+    <TabPage Title="Consultas">
+        <h4>Lista de Tareas</h4>
+        @if (isLoading)
+        {
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        }
+        else if (tareas == null)
+        {
+            <p>No se pudieron cargar las tareas.</p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Título</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var tarea in tareas)
+                    {
+                        <tr>
+                            <td>@tarea.Id</td>
+                            <td>@tarea.Titulo</td>
+                            <td>@(tarea.Completada ? "Completada" : "Pendiente")</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" @onclick="() => ToggleTareaEstado(tarea)">
+                                    @(tarea.Completada ? "Marcar Pendiente" : "Marcar Completada")
+                                </button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => EliminarTarea(tarea.Id)">
+                                    Eliminar
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="mt-3">
+                <h5>Agregar Nueva Tarea</h5>
+                <div class="input-group">
+                    <input type="text" class="form-control" @bind="nuevaTareaTitulo" placeholder="Título de la tarea" />
+                    <button class="btn btn-primary" @onclick="AgregarTarea">Agregar</button>
+                </div>
+            </div>
+        }
+    </TabPage>
+</TabView>
+
+@code {
+    private bool isLoading = false;
+    private List<Tarea>? tareas;
+    private string nuevaTareaTitulo = string.Empty;
+    [Inject] private HttpClient Http { get; set; } = default!;
+    [Inject] private WebSocketService WebSocket { get; set; } = default!;
+
+    private bool led1State = false;
+    private bool led2State = false;
+    private bool isConnected = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarTareas();
+    }
+
+    private async Task CargarTareas()
+    {
+        isLoading = true;
+        try
+        {
+            tareas = await Http.GetFromJsonAsync<List<Tarea>>("api/tareas");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar tareas: {ex.Message}");
+            tareas = null;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AgregarTarea()
+    {
+        if (string.IsNullOrWhiteSpace(nuevaTareaTitulo)) return;
+
+        var nuevaTarea = new Tarea { Titulo = nuevaTareaTitulo, Completada = false };
+        try
+        {
+            await Http.PostAsJsonAsync("api/tareas", nuevaTarea);
+            await CargarTareas();
+            nuevaTareaTitulo = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al agregar tarea: {ex.Message}");
+        }
+    }
+
+    private async Task ToggleTareaEstado(Tarea tarea)
+    {
+        tarea.Completada = !tarea.Completada;
+        try
+        {
+            await Http.PutAsJsonAsync($"api/tareas/{tarea.Id}", tarea);
+            await CargarTareas();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al actualizar tarea: {ex.Message}");
+        }
+    }
+
+    private async Task EliminarTarea(int id)
+    {
+        try
+        {
+            await Http.DeleteAsync($"api/tareas/{id}");
+            await CargarTareas();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al eliminar tarea: {ex.Message}");
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        WebSocket.MessageReceived += HandleWebSocketMessage;
+        _ = InitWebSocket();
+    }
+
+    private async Task InitWebSocket()
+    {
+        await WebSocket.ConnectAsync();
+        isConnected = true;
+        StateHasChanged();
+        await WebSocket.SendAsync("GET_STATE");
+    }
+
+    private void HandleWebSocketMessage(string message)
+    {
+        if (message.StartsWith("LED1_"))
+        {
+            led1State = message.EndsWith("ON");
+            StateHasChanged();
+        }
+        else if (message.StartsWith("LED2_"))
+        {
+            led2State = message.EndsWith("ON");
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleLed1()
+    {
+        if (isConnected)
+        {
+            await WebSocket.SendAsync("TOGGLE_1");
+        }
+    }
+
+    private async Task ToggleLed2()
+    {
+        if (isConnected)
+        {
+            await WebSocket.SendAsync("TOGGLE_2");
+        }
+    }
+
+    public void Dispose()
+    {
+        WebSocket.MessageReceived -= HandleWebSocketMessage;
+    }
+
+    public class Tarea
+    {
+        public int Id { get; set; }
+        public string Titulo { get; set; } = string.Empty;
+        public bool Completada { get; set; }
+    }
+}
