@@ -1,0 +1,616 @@
+@page "/historial-leds"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Web
+
+<PageTitle>Historial de LEDs</PageTitle>
+
+<div class="led-history-container">
+    <div class="header-section">
+        <h1><i class="fas fa-history"></i> Historial de LEDs</h1>
+        <p class="lead">Registro completo de actividad de los LEDs del ESP32</p>
+        
+        <div class="action-buttons">
+            <button class="btn btn-primary" @onclick="ReloadHistory">
+                <i class="fas fa-sync-alt"></i> Actualizar
+            </button>
+            <button class="btn btn-success" @onclick="ExportData">
+                <i class="fas fa-download"></i> Exportar
+            </button>
+            <button class="btn btn-warning" @onclick="ClearFilters">
+                <i class="fas fa-filter"></i> Limpiar Filtros
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filters-section">
+        <div class="row">
+            <div class="col-md-3">
+                <label class="form-label">Filtrar por LED</label>
+                <select class="form-select" @bind="selectedLed">
+                    <option value="">Todos los LEDs</option>
+                    <option value="LED1">LED 1</option>
+                    <option value="LED2">LED 2</option>
+                    <option value="TOGGLE_1">Toggle LED 1</option>
+                    <option value="TOGGLE_2">Toggle LED 2</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Fecha desde</label>
+                <input type="datetime-local" class="form-control" @bind="fechaDesde" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Fecha hasta</label>
+                <input type="datetime-local" class="form-control" @bind="fechaHasta" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Buscar</label>
+                <input type="text" class="form-control" placeholder="Buscar en comandos..." @bind="searchText" @bind:event="oninput" />
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="stats-section">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-card led1-stats">
+                    <i class="fas fa-lightbulb"></i>
+                    <div class="stat-info">
+                        <h3>@led1Count</h3>
+                        <p>Eventos LED 1</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card led2-stats">
+                    <i class="fas fa-lightbulb"></i>
+                    <div class="stat-info">
+                        <h3>@led2Count</h3>
+                        <p>Eventos LED 2</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card total-stats">
+                    <i class="fas fa-chart-bar"></i>
+                    <div class="stat-info">
+                        <h3>@totalEvents</h3>
+                        <p>Total Eventos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card time-stats">
+                    <i class="fas fa-clock"></i>
+                    <div class="stat-info">
+                        <h3>@GetLastEventTime()</h3>
+                        <p>Último Evento</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline de eventos -->
+    <div class="timeline-section">
+        <h3><i class="fas fa-stream"></i> Timeline de Eventos</h3>
+        <div class="timeline-container">
+            @if (filteredEvents == null)
+            {
+                <div class="loading-spinner">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Cargando historial...</p>
+                </div>
+            }
+            else if (filteredEvents.Count == 0)
+            {
+                <div class="no-data">
+                    <i class="fas fa-inbox"></i>
+                    <p>No hay eventos que mostrar</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var evento in filteredEvents.Take(100))
+                {
+                    <div class="timeline-item @GetEventClass(evento.Command)">
+                        <div class="timeline-icon">
+                            <i class="@GetEventIcon(evento.Command)"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <div class="timeline-header">
+                                <h5>@GetEventTitle(evento.Command)</h5>
+                                <span class="timeline-time">@FormatDateTime(evento.Timestamp)</span>
+                            </div>
+                            <div class="timeline-body">
+                                <p><strong>Comando:</strong> <code>@evento.Command</code></p>
+                                <p><strong>ID:</strong> #@evento.Id</p>
+                                <div class="timeline-actions">
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => RepeatCommand(evento.Command)">
+                                        <i class="fas fa-redo"></i> Repetir
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                
+                @if (filteredEvents.Count > 100)
+                {
+                    <div class="load-more">
+                        <button class="btn btn-outline-secondary" @onclick="LoadMoreEvents">
+                            <i class="fas fa-plus"></i> Cargar más eventos (@(filteredEvents.Count - 100) restantes)
+                        </button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .led-history-container {
+        padding: 1rem;
+    }
+
+    .header-section {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .action-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .filters-section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+    }
+
+    .stats-section {
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: transform 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .stat-card i {
+        font-size: 2rem;
+    }
+
+    .led1-stats {
+        border-left: 4px solid #28a745;
+    }
+
+    .led1-stats i {
+        color: #28a745;
+    }
+
+    .led2-stats {
+        border-left: 4px solid #17a2b8;
+    }
+
+    .led2-stats i {
+        color: #17a2b8;
+    }
+
+    .total-stats {
+        border-left: 4px solid #6f42c1;
+    }
+
+    .total-stats i {
+        color: #6f42c1;
+    }
+
+    .time-stats {
+        border-left: 4px solid #fd7e14;
+    }
+
+    .time-stats i {
+        color: #fd7e14;
+    }
+
+    .stat-info h3 {
+        font-size: 2rem;
+        font-weight: bold;
+        margin: 0;
+    }
+
+    .stat-info p {
+        margin: 0;
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+
+    .timeline-section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .timeline-container {
+        position: relative;
+        padding-left: 30px;
+    }
+
+    .timeline-container::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+
+    .timeline-item {
+        position: relative;
+        margin-bottom: 2rem;
+        padding-left: 2rem;
+    }
+
+    .timeline-icon {
+        position: absolute;
+        left: -2rem;
+        top: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.8rem;
+    }
+
+    .timeline-item.led1 .timeline-icon {
+        background: #28a745;
+    }
+
+    .timeline-item.led2 .timeline-icon {
+        background: #17a2b8;
+    }
+
+    .timeline-item.toggle .timeline-icon {
+        background: #ffc107;
+        color: #000;
+    }
+
+    .timeline-item.other .timeline-icon {
+        background: #6c757d;
+    }
+
+    .timeline-content {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 3px solid #dee2e6;
+    }
+
+    .timeline-item.led1 .timeline-content {
+        border-left-color: #28a745;
+    }
+
+    .timeline-item.led2 .timeline-content {
+        border-left-color: #17a2b8;
+    }
+
+    .timeline-item.toggle .timeline-content {
+        border-left-color: #ffc107;
+    }
+
+    .timeline-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .timeline-header h5 {
+        margin: 0;
+        font-size: 1.1rem;
+    }
+
+    .timeline-time {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .timeline-body p {
+        margin: 0.25rem 0;
+        font-size: 0.9rem;
+    }
+
+    .timeline-actions {
+        margin-top: 0.5rem;
+    }
+
+    .loading-spinner, .no-data {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+
+    .loading-spinner i {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+    }
+
+    .no-data i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    .load-more {
+        text-align: center;
+        margin-top: 2rem;
+    }
+
+    code {
+        background: #e9ecef;
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+    }
+</style>
+
+@code {
+    public class LedEvent
+    {
+        public int Id { get; set; }
+        public string? Timestamp { get; set; }
+        public string? Command { get; set; }
+    }
+
+    private List<LedEvent>? allEvents;
+    private List<LedEvent>? filteredEvents;
+    private string selectedLed = "";
+    private DateTime? fechaDesde;
+    private DateTime? fechaHasta;
+    private string searchText = "";
+    
+    private int led1Count = 0;
+    private int led2Count = 0;
+    private int totalEvents = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLedHistory();
+        ApplyFilters();
+        CalculateStats();
+    }
+
+    private async Task LoadLedHistory()
+    {
+        try
+        {
+            // Usar el endpoint principal y filtrar en el cliente
+            var response = await Http.GetAsync("http://localhost:5000/events");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var allEventsFromDb = System.Text.Json.JsonSerializer.Deserialize<List<LedEvent>>(json);
+                
+                if (allEventsFromDb != null)
+                {
+                    // Filtrar solo eventos relacionados con LEDs
+                    allEvents = allEventsFromDb
+                        .Where(e => IsLedEvent(e.Command))
+                        .OrderByDescending(e => e.Id)
+                        .ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error cargando historial: {ex.Message}");
+            allEvents = new List<LedEvent>();
+        }
+    }
+
+    private bool IsLedEvent(string? command)
+    {
+        if (string.IsNullOrEmpty(command)) return false;
+        
+        return command.StartsWith("LED1") || 
+               command.StartsWith("LED2") || 
+               command.StartsWith("TOGGLE_1") || 
+               command.StartsWith("TOGGLE_2");
+    }
+
+    private void ApplyFilters()
+    {
+        if (allEvents == null)
+        {
+            filteredEvents = new List<LedEvent>();
+            return;
+        }
+
+        var filtered = allEvents.AsEnumerable();
+
+        // Filtro por LED
+        if (!string.IsNullOrEmpty(selectedLed))
+        {
+            filtered = filtered.Where(e => e.Command?.Contains(selectedLed) == true);
+        }
+
+        // Filtro por fecha
+        if (fechaDesde.HasValue)
+        {
+            filtered = filtered.Where(e => 
+                DateTime.TryParse(e.Timestamp, out var eventDate) && 
+                eventDate >= fechaDesde.Value);
+        }
+
+        if (fechaHasta.HasValue)
+        {
+            filtered = filtered.Where(e => 
+                DateTime.TryParse(e.Timestamp, out var eventDate) && 
+                eventDate <= fechaHasta.Value);
+        }
+
+        // Filtro por texto
+        if (!string.IsNullOrEmpty(searchText))
+        {
+            filtered = filtered.Where(e => 
+                e.Command?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true);
+        }
+
+        filteredEvents = filtered.ToList();
+    }
+
+    private void CalculateStats()
+    {
+        if (allEvents == null) return;
+
+        led1Count = allEvents.Count(e => e.Command?.Contains("LED1") == true || e.Command?.Contains("TOGGLE_1") == true);
+        led2Count = allEvents.Count(e => e.Command?.Contains("LED2") == true || e.Command?.Contains("TOGGLE_2") == true);
+        totalEvents = allEvents.Count;
+    }
+
+    private string GetLastEventTime()
+    {
+        if (allEvents?.Any() != true) return "N/A";
+        
+        var lastEvent = allEvents.First();
+        if (DateTime.TryParse(lastEvent.Timestamp, out var date))
+        {
+            var diff = DateTime.Now - date;
+            if (diff.TotalMinutes < 1) return "Hace unos segundos";
+            if (diff.TotalHours < 1) return $"Hace {(int)diff.TotalMinutes} min";
+            if (diff.TotalDays < 1) return $"Hace {(int)diff.TotalHours} h";
+            return $"Hace {(int)diff.TotalDays} días";
+        }
+        
+        return "N/A";
+    }
+
+    private string GetEventClass(string? command)
+    {
+        if (string.IsNullOrEmpty(command)) return "other";
+        
+        if (command.Contains("LED1")) return "led1";
+        if (command.Contains("LED2")) return "led2";
+        if (command.Contains("TOGGLE")) return "toggle";
+        
+        return "other";
+    }
+
+    private string GetEventIcon(string? command)
+    {
+        if (string.IsNullOrEmpty(command)) return "fas fa-question";
+        
+        if (command.Contains("LED1")) return "fas fa-lightbulb";
+        if (command.Contains("LED2")) return "fas fa-lightbulb";
+        if (command.Contains("TOGGLE")) return "fas fa-toggle-on";
+        
+        return "fas fa-cog";
+    }
+
+    private string GetEventTitle(string? command)
+    {
+        if (string.IsNullOrEmpty(command)) return "Evento Desconocido";
+        
+        return command switch
+        {
+            "LED1_ON" => "LED 1 Encendido",
+            "LED1_OFF" => "LED 1 Apagado",
+            "LED2_ON" => "LED 2 Encendido",
+            "LED2_OFF" => "LED 2 Apagado",
+            "TOGGLE_1" => "Toggle LED 1",
+            "TOGGLE_2" => "Toggle LED 2",
+            _ => command
+        };
+    }
+
+    private string FormatDateTime(string? timestamp)
+    {
+        if (string.IsNullOrEmpty(timestamp)) return "";
+        
+        if (DateTime.TryParse(timestamp, out var date))
+        {
+            return date.ToString("dd/MM/yyyy HH:mm:ss");
+        }
+        
+        return timestamp;
+    }
+
+    private async Task ReloadHistory()
+    {
+        await LoadLedHistory();
+        ApplyFilters();
+        CalculateStats();
+        StateHasChanged();
+    }
+
+    private async Task RepeatCommand(string? command)
+    {
+        if (string.IsNullOrEmpty(command)) return;
+        
+        try
+        {
+            var content = new StringContent(
+                $"{{\"command\":\"{command}\"}}",
+                System.Text.Encoding.UTF8,
+                "application/json"
+            );
+            
+            await Http.PostAsync(Navigation.BaseUri + "events/add", content);
+            await ReloadHistory();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error repitiendo comando: {ex.Message}");
+        }
+    }
+
+    private void ClearFilters()
+    {
+        selectedLed = "";
+        fechaDesde = null;
+        fechaHasta = null;
+        searchText = "";
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private async Task ExportData()
+    {
+        // TODO: Implementar exportación de datos
+        await Task.Delay(100);
+    }
+
+    private void LoadMoreEvents()
+    {
+        // La lógica ya está implementada en el template con Take(100)
+        StateHasChanged();
+    }
+
+    // Actualizar filtros en tiempo real
+    protected override void OnParametersSet()
+    {
+        ApplyFilters();
+        base.OnParametersSet();
+    }
+}

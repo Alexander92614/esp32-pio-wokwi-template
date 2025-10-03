@@ -1,0 +1,205 @@
+@page "/monitor"
+@inject HttpClient Http
+
+<PageTitle>Monitor ESP32</PageTitle>
+
+<div class="container">
+    <h1><i class="fas fa-chart-line"></i> Monitor ESP32</h1>
+
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-terminal"></i> Consola Serial</h4>
+                </div>
+                <div class="card-body">
+                    <div class="serial-monitor" @ref="serialMonitor">
+                        @foreach (var line in serialOutput)
+                        {
+                            <div class="serial-line">@line</div>
+                        }
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="input-group">
+                        <input type="text" class="form-control" 
+                               placeholder="Enviar comando..." 
+                               @bind="commandInput" 
+                               @onkeypress="HandleKeyPress" />
+                        <button class="btn btn-primary" @onclick="SendCommand">
+                            <i class="fas fa-paper-plane"></i> Enviar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4><i class="fas fa-microchip"></i> Estado ESP32</h4>
+                </div>
+                <div class="card-body">
+                    <div class="status-item">
+                        <i class="fas fa-plug @(isConnected ? "text-success" : "text-danger")"></i>
+                        <span>Estado: @(isConnected ? "Conectado" : "Desconectado")</span>
+                    </div>
+                    <div class="status-item">
+                        <i class="fas fa-memory"></i>
+                        <span>Memoria: @memoryUsage%</span>
+                    </div>
+                    <div class="status-item">
+                        <i class="fas fa-temperature-high"></i>
+                        <span>CPU: @cpuTemp°C</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-cog"></i> Opciones</h4>
+                </div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" @bind="autoScroll">
+                        <label class="form-check-label">Auto-scroll</label>
+                    </div>
+                    <button class="btn btn-secondary w-100 mb-2" @onclick="ClearConsole">
+                        <i class="fas fa-eraser"></i> Limpiar Consola
+                    </button>
+                    <button class="btn btn-info w-100" @onclick="ExportLogs">
+                        <i class="fas fa-file-export"></i> Exportar Logs
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .serial-monitor {
+        height: 400px;
+        overflow-y: auto;
+        background-color: #1e1e1e;
+        color: #fff;
+        padding: 1rem;
+        font-family: 'Consolas', monospace;
+        border-radius: 4px;
+    }
+
+    .serial-line {
+        margin: 2px 0;
+        white-space: pre-wrap;
+    }
+
+    .status-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .status-item i {
+        margin-right: 10px;
+        width: 20px;
+    }
+</style>
+
+@code {
+    private ElementReference serialMonitor;
+    private List<string> serialOutput = new();
+    private string commandInput = "";
+    private bool autoScroll = true;
+    private bool isConnected = false;
+    private int memoryUsage = 0;
+    private double cpuTemp = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Iniciar conexión WebSocket y monitores
+        await InitializeMonitoring();
+    }
+
+    private async Task InitializeMonitoring()
+    {
+        try
+        {
+            // Simulación de conexión asíncrona
+            await Task.Delay(500); // Simular tiempo de conexión
+
+            // Simulación de datos para demostración
+            isConnected = true;
+            memoryUsage = 45;
+            cpuTemp = 38.5;
+
+            // Simulación de mensajes con delays para efecto realista
+            AddSerialMessage("Inicializando ESP32...");
+            await Task.Delay(300);
+            
+            AddSerialMessage("ESP32 inicializado");
+            await Task.Delay(200);
+            
+            AddSerialMessage("Conectando a WiFi...");
+            await Task.Delay(800);
+            
+            AddSerialMessage("WiFi conectado! IP: 192.168.1.100");
+
+            // TODO: Implementar la conexión real al ESP32
+            // await websocketService.ConnectAsync();
+        }
+        catch (Exception ex)
+        {
+            AddSerialMessage($"Error de inicialización: {ex.Message}");
+            isConnected = false;
+        }
+    }
+
+    private async Task SendCommand()
+    {
+        if (string.IsNullOrWhiteSpace(commandInput))
+            return;
+
+        try
+        {
+            var command = commandInput;
+            AddSerialMessage($"> {command}");
+            
+            // Simular envío de comando
+            await Task.Delay(100);
+            
+            // TODO: Implementar el envío real del comando
+            // await websocketService.SendCommandAsync(command);
+            
+            commandInput = ""; // Limpiar input solo si el envío fue exitoso
+        }
+        catch (Exception ex)
+        {
+            AddSerialMessage($"Error al enviar comando: {ex.Message}");
+        }
+    }
+
+    private void AddSerialMessage(string message)
+    {
+        serialOutput.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
+        StateHasChanged();
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendCommand();
+        }
+    }
+
+    private void ClearConsole()
+    {
+        serialOutput.Clear();
+        StateHasChanged();
+    }
+
+    private async Task ExportLogs()
+    {
+        // Implementar exportación de logs
+        await Task.Delay(100);
+    }
+}

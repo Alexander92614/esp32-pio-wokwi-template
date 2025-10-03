@@ -1,0 +1,31 @@
+# Servidor WebSocket y comunicación asíncrona
+websockets>=12.0
+asyncio-extras>=1.3.2
+
+# Configuración y variables de entorno
+python-dotenv>=1.0.0
+
+
+# Logging y utilidades
+pathlib  # Viene incluido con Python 3.4+
+
+# Manejo de fechas y tiempo
+datetime  # Viene incluido con Python
+
+# Desarrollo y testing (opcional)
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Herramientas de desarrollo
+black>=23.0.0  # Formateador de código
+flake8>=6.0.0  # Linter
+mypy>=1.5.0    # Type checker
+
+# Comunicación serial (si se necesita en el futuro)
+pyserial>=3.5
+
+# HTTP server mejorado (opcional, alternativa a http.server)
+aiohttp>=3.8.0
+
+# Utilidades adicionales
+typing-extensions>=4.7.0

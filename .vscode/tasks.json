@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Create Config Page",
+			"type": "shell",
+			"command": "New-Item -Path \"BlazorApp/Pages/Config.razor\" -ItemType File -Force",
+			"group": "build"
+		},
+		{
+			"label": "Create Monitor Page",
+			"type": "shell",
+			"command": "New-Item -Path \"BlazorApp/Pages/Monitor.razor\" -ItemType File -Force",
+			"group": "build"
+		}
+	]
+}

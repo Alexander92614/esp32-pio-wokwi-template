@@ -1,0 +1,295 @@
+@page "/control"
+@inject WebSocketService WebSocketService
+@implements IDisposable
+
+<PageTitle>Control ESP32</PageTitle>
+
+<div class="control-panel">
+    <h1><i class="fas fa-microchip"></i> Control ESP32</h1>
+
+    <div class="controls-grid">
+        <!-- Control de LEDs -->
+        <div class="control-card">
+            <div class="card-header">
+                <h3><i class="fas fa-lightbulb"></i> Control de LEDs</h3>
+            </div>
+            <div class="card-body">
+                <div class="led-controls">
+                    <div class="led-control">
+                        <span>LED 1</span>
+                        <button class="@GetLedClass(1)" @onclick="() => ToggleLED(1)">
+                            <i class="fas fa-power-off"></i>
+                            @GetLedStatus(1)
+                        </button>
+                    </div>
+                    <div class="led-control">
+                        <span>LED 2</span>
+                        <button class="@GetLedClass(2)" @onclick="() => ToggleLED(2)">
+                            <i class="fas fa-power-off"></i>
+                            @GetLedStatus(2)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control de PWM -->
+        <div class="control-card">
+            <div class="card-header">
+                <h3><i class="fas fa-sliders-h"></i> Control PWM</h3>
+            </div>
+            <div class="card-body">
+                <div class="pwm-control">
+                    <label>Intensidad LED 1</label>
+                    <input type="range" min="0" max="255" @bind="pwmValue1" @bind:event="oninput" 
+                           @onchange="() => UpdatePWM(1)" />
+                    <span class="pwm-value">@pwmValue1</span>
+                </div>
+                <div class="pwm-control">
+                    <label>Intensidad LED 2</label>
+                    <input type="range" min="0" max="255" @bind="pwmValue2" @bind:event="oninput"
+                           @onchange="() => UpdatePWM(2)" />
+                    <span class="pwm-value">@pwmValue2</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control de GPIO -->
+        <div class="control-card">
+            <div class="card-header">
+                <h3><i class="fas fa-plug"></i> GPIO</h3>
+            </div>
+            <div class="card-body">
+                <div class="gpio-grid">
+                    @for (int i = 0; i < 8; i++)
+                    {
+                        var pin = i;
+                        <div class="gpio-control">
+                            <span>GPIO @pin</span>
+                            <button class="@GetGpioClass(pin)" @onclick="() => ToggleGPIO(pin)">
+                                @GetGpioStatus(pin)
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .control-panel {
+        padding: 1rem;
+    }
+
+    .controls-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .control-card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .card-header {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+
+    .led-controls {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .led-control {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .btn-led {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        min-width: 100px;
+    }
+
+    .btn-led.on {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .btn-led.off {
+        background-color: #dc3545;
+        color: white;
+    }
+
+    .pwm-control {
+        margin-bottom: 1rem;
+    }
+
+    .pwm-control input[type="range"] {
+        width: 100%;
+        margin: 0.5rem 0;
+    }
+
+    .pwm-value {
+        display: inline-block;
+        min-width: 40px;
+        text-align: right;
+    }
+
+    .gpio-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 0.5rem;
+    }
+
+    .gpio-control {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-gpio {
+        width: 60px;
+        height: 30px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .btn-gpio.high {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .btn-gpio.low {
+        background-color: #dc3545;
+        color: white;
+    }
+</style>
+
+@code {
+    private Dictionary<int, bool> ledStates = new() { { 1, false }, { 2, false } };
+    private Dictionary<int, bool> gpioStates = new();
+    private int pwmValue1 = 0;
+    private int pwmValue2 = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Inicializar estados GPIO
+            for (int i = 0; i < 8; i++)
+            {
+                gpioStates[i] = false;
+            }
+
+            WebSocketService.MessageReceived += OnMessageReceived;
+            WebSocketService.ConnectionStateChanged += OnConnectionStateChanged;
+
+            // Intentar conectar si no está conectado
+            if (!WebSocketService.IsConnected)
+            {
+                await WebSocketService.ConnectAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error en la inicialización: {ex.Message}");
+        }
+    }
+
+    private void OnConnectionStateChanged(bool isConnected)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleLED(int ledNum)
+    {
+        ledStates[ledNum] = !ledStates[ledNum];
+        await WebSocketService.SendAsync($"TOGGLE_{ledNum}");
+    }
+
+    private async Task UpdatePWM(int ledNum)
+    {
+        int value = ledNum == 1 ? pwmValue1 : pwmValue2;
+        await WebSocketService.SendAsync($"PWM{ledNum}_{value}");
+    }
+
+    private async Task ToggleGPIO(int pin)
+    {
+        gpioStates[pin] = !gpioStates[pin];
+        await WebSocketService.SendAsync($"GPIO{pin}_{(gpioStates[pin] ? "HIGH" : "LOW")}");
+    }
+
+    private string GetLedClass(int ledNum) => 
+        $"btn-led {(ledStates[ledNum] ? "on" : "off")}";
+
+    private string GetLedStatus(int ledNum) => 
+        ledStates[ledNum] ? "ON" : "OFF";
+
+    private string GetGpioClass(int pin) => 
+        $"btn-gpio {(gpioStates[pin] ? "high" : "low")}";
+
+    private string GetGpioStatus(int pin) => 
+        gpioStates[pin] ? "HIGH" : "LOW";
+
+    private void OnMessageReceived(string message)
+    {
+        if (message.StartsWith("LED"))
+        {
+            var parts = message.Split('_');
+            if (parts.Length == 2)
+            {
+                if (parts[0] == "LED1" && int.TryParse("1", out int led1Num))
+                {
+                    ledStates[led1Num] = parts[1] == "ON";
+                    InvokeAsync(StateHasChanged);
+                }
+                else if (parts[0] == "LED2" && int.TryParse("2", out int led2Num))
+                {
+                    ledStates[led2Num] = parts[1] == "ON";
+                    InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        else if (message.StartsWith("GPIO"))
+        {
+            var parts = message.Split('_');
+            if (parts.Length == 2 && int.TryParse(parts[0][4..], out int pin))
+            {
+                gpioStates[pin] = parts[1] == "HIGH";
+                InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            WebSocketService.MessageReceived -= OnMessageReceived;
+            WebSocketService.ConnectionStateChanged -= OnConnectionStateChanged;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error en Dispose: {ex.Message}");
+        }
+    }
+}

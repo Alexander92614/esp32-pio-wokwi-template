@@ -1,0 +1,110 @@
+﻿@implements IDisposable
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">🔌 ESP32 Control Hub</a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        <!-- Sección Principal -->
+        <div class="nav-section">
+            <div class="nav-section-title">Principal</div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <i class="fas fa-home"></i> Inicio
+                </NavLink>
+            </div>
+        </div>
+
+        <!-- Sección Control -->
+        <div class="nav-section">
+            <div class="nav-section-title">Control</div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="control">
+                    <i class="fas fa-gamepad"></i> Control LEDs
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="monitor">
+                    <i class="fas fa-tv"></i> Monitor Serial
+                </NavLink>
+            </div>
+        </div>
+
+        <!-- Sección Datos -->
+        <div class="nav-section">
+            <div class="nav-section-title">Datos</div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="historial-leds">
+                    <i class="fas fa-history"></i> Historial LEDs
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="events">
+                    <i class="fas fa-database"></i> Todos los Eventos
+                </NavLink>
+            </div>
+        </div>
+
+        <!-- Sección Sistema -->
+        <div class="nav-section">
+            <div class="nav-section-title">Sistema</div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="config">
+                    <i class="fas fa-cogs"></i> Configuración
+                </NavLink>
+            </div>
+        </div>
+
+        <!-- Estado de Conexión -->
+        <div class="nav-section connection-status">
+            <div class="connection-indicator @(isConnected ? "connected" : "disconnected")">
+                <i class="fas @(isConnected ? "fa-wifi" : "fa-wifi-slash")"></i>
+                <span>@(isConnected ? "Conectado" : "Desconectado")</span>
+            </div>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+    private bool isConnected = false;
+    private Timer? connectionTimer;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    protected override void OnInitialized()
+    {
+        // Simular verificación de conexión cada 5 segundos
+        connectionTimer = new Timer(CheckConnection, null, 0, 5000);
+    }
+
+    private void CheckConnection(object? state)
+    {
+        // Aquí puedes implementar la lógica real de verificación de conexión
+        // Por ahora, simulamos un estado aleatorio para demostración
+        var random = new Random();
+        var newConnectionState = random.Next(0, 10) > 2; // 80% probabilidad de estar conectado
+        
+        if (newConnectionState != isConnected)
+        {
+            isConnected = newConnectionState;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    public void Dispose()
+    {
+        connectionTimer?.Dispose();
+    }
+}

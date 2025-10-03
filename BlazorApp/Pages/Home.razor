@@ -1,0 +1,409 @@
+@page "/"
+@using System.Timers
+@using System.Diagnostics
+@inject WebSocketService WebSocketService
+@inject HttpClient Http
+@implements IDisposable
+
+<PageTitle>Panel de Control ESP32</PageTitle>
+
+<div class="dashboard">
+    <div class="welcome-section">
+        <h1><i class="fas fa-microchip"></i> Panel de Control ESP32</h1>
+        <p class="lead">Bienvenido al sistema de control y monitoreo del ESP32</p>
+    </div>
+
+    <div class="status-cards">
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-server"></i> Estado del Sistema</h3>
+            </div>
+            <div class="card-body">
+                <div class="status-item">
+                    <i class="@(isConnected ? "fas fa-check-circle text-success" : "fas fa-times-circle text-danger")"></i>
+                    <span>Conexión: @(isConnected ? "Conectado" : "Desconectado")</span>
+                </div>
+                <div class="status-item">
+                    <i class="fas fa-clock"></i>
+                    <span>Tiempo activo: @uptime</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-chart-bar"></i> Métricas</h3>
+            </div>
+            <div class="card-body">
+                <div class="status-item">
+                    <i class="fas fa-memory"></i>
+                    <span>Memoria: @memoryUsage%</span>
+                </div>
+                <div class="status-item">
+                    <i class="fas fa-temperature-high"></i>
+                    <span>CPU: @cpuTemp°C</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="quick-actions">
+        <h2><i class="fas fa-bolt"></i> Acciones Rápidas</h2>
+        <div class="action-buttons">
+            <button class="btn btn-primary" @onclick="NavigateToControl">
+                <i class="fas fa-gamepad"></i> 
+                <div>
+                    <strong>Control LEDs</strong>
+                    <small>Controla los 2 LEDs</small>
+                </div>
+            </button>
+            <button class="btn btn-info" @onclick="NavigateToMonitor">
+                <i class="fas fa-tv"></i> 
+                <div>
+                    <strong>Monitor Serial</strong>
+                    <small>Consola en tiempo real</small>
+                </div>
+            </button>
+            <button class="btn btn-success" @onclick="NavigateToLedHistory">
+                <i class="fas fa-history"></i> 
+                <div>
+                    <strong>Historial LEDs</strong>
+                    <small>Solo eventos de LEDs</small>
+                </div>
+            </button>
+            <button class="btn btn-info" @onclick="NavigateToEvents">
+                <i class="fas fa-database"></i> 
+                <div>
+                    <strong>Todos los Eventos</strong>
+                    <small>@eventCount eventos totales</small>
+                </div>
+            </button>
+            <button class="btn btn-secondary" @onclick="NavigateToConfig">
+                <i class="fas fa-cogs"></i> 
+                <div>
+                    <strong>Configuración</strong>
+                    <small>Ajustes del sistema</small>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <div class="led-status-section">
+        <h2><i class="fas fa-lightbulb"></i> Estado de LEDs</h2>
+        <div class="led-indicators">
+            <div class="led-indicator @(led1State ? "led-on" : "led-off")">
+                <i class="fas fa-circle"></i>
+                <span>LED 1</span>
+                <small>@(led1State ? "Encendido" : "Apagado")</small>
+            </div>
+            <div class="led-indicator @(led2State ? "led-on" : "led-off")">
+                <i class="fas fa-circle"></i>
+                <span>LED 2</span>
+                <small>@(led2State ? "Encendido" : "Apagado")</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .dashboard {
+        padding: 2rem;
+    }
+
+    .welcome-section {
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+
+    .status-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .card-header {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+
+    .status-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .status-item i {
+        margin-right: 0.5rem;
+        width: 20px;
+    }
+
+    .quick-actions {
+        text-align: center;
+    }
+
+    .action-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .btn {
+        padding: 1rem;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 1rem;
+        text-align: left;
+    }
+
+    .btn i {
+        font-size: 1.5rem;
+        width: 30px;
+    }
+
+    .btn div {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .btn strong {
+        font-size: 1rem;
+        margin-bottom: 0.2rem;
+    }
+
+    .btn small {
+        font-size: 0.8rem;
+        opacity: 0.8;
+    }
+
+    .led-status-section {
+        margin-top: 2rem;
+        text-align: center;
+    }
+
+    .led-indicators {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        margin-top: 1rem;
+    }
+
+    .led-indicator {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 1rem;
+        border-radius: 8px;
+        background: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        min-width: 120px;
+        transition: all 0.3s ease;
+    }
+
+    .led-indicator i {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .led-indicator.led-on {
+        background-color: #d4edda;
+        border: 2px solid #28a745;
+    }
+
+    .led-indicator.led-on i {
+        color: #28a745;
+        text-shadow: 0 0 10px #28a745;
+        animation: glow-green 2s infinite;
+    }
+
+    .led-indicator.led-off {
+        background-color: #f8d7da;
+        border: 2px solid #dc3545;
+    }
+
+    .led-indicator.led-off i {
+        color: #dc3545;
+    }
+
+    @@keyframes glow-green {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+
+    .text-success { color: #28a745; }
+    .text-danger { color: #dc3545; }
+</style>
+
+@code {
+    private bool isConnected = false;
+    private string uptime = "0:00:00";
+    private int memoryUsage = 0;
+    private double cpuTemp = 0;
+    private System.Timers.Timer? timer;
+    private DateTime startTime;
+    private bool led1State = false;
+    private bool led2State = false;
+    private int eventCount = 0;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        WebSocketService.MessageReceived += OnMessageReceived;
+        await WebSocketService.ConnectAsync();
+        isConnected = true;
+        startTime = DateTime.Now;
+
+        // Cargar el número de eventos
+        await LoadEventCount();
+
+        // Iniciar el timer para actualizar el tiempo de actividad
+        timer = new System.Timers.Timer(1000);
+        timer.Elapsed += (s, e) => UpdateMetrics();
+        timer.Start();
+    }
+
+    private async Task LoadEventCount()
+    {
+        try
+        {
+            var response = await Http.GetAsync(Navigation.BaseUri + "events");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var events = System.Text.Json.JsonSerializer.Deserialize<List<object>>(json);
+                eventCount = events?.Count ?? 0;
+            }
+        }
+        catch
+        {
+            eventCount = 0;
+        }
+    }
+
+    private void UpdateMetrics()
+    {
+        uptime = (DateTime.Now - startTime).ToString(@"hh\:mm\:ss");
+        memoryUsage = (int)(GC.GetTotalMemory(false) / (1024.0 * 1024.0));
+        cpuTemp = Random.Shared.Next(30, 45) + Random.Shared.NextDouble(); // Simulación
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void NavigateToControl() => Navigation.NavigateTo("control");
+    private void NavigateToMonitor() => Navigation.NavigateTo("monitor");
+    private void NavigateToEvents() => Navigation.NavigateTo("events");
+    private void NavigateToConfig() => Navigation.NavigateTo("config");
+    private void NavigateToLedHistory() => Navigation.NavigateTo("historial-leds");
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+        WebSocketService.MessageReceived -= OnMessageReceived;
+    }
+
+    private async void OnMessageReceived(string message)
+    {
+        try
+        {
+            // Procesar los mensajes del WebSocket
+            if (message.StartsWith("STATUS:"))
+            {
+                var status = message.Substring(7);
+                await InvokeAsync(() =>
+                {
+                    switch (status)
+                    {
+                        case "CONNECTED":
+                            isConnected = true;
+                            break;
+                        case "DISCONNECTED":
+                            isConnected = false;
+                            break;
+                    }
+                    StateHasChanged();
+                });
+            }
+            else if (message.StartsWith("LED1_"))
+            {
+                var state = message.Substring(5);
+                await InvokeAsync(() =>
+                {
+                    led1State = state == "ON";
+                    StateHasChanged();
+                });
+            }
+            else if (message.StartsWith("LED2_"))
+            {
+                var state = message.Substring(5);
+                await InvokeAsync(() =>
+                {
+                    led2State = state == "ON";
+                    StateHasChanged();
+                });
+            }
+            else if (message.StartsWith("TOGGLE_1"))
+            {
+                await InvokeAsync(() =>
+                {
+                    led1State = !led1State;
+                    StateHasChanged();
+                });
+            }
+            else if (message.StartsWith("TOGGLE_2"))
+            {
+                await InvokeAsync(() =>
+                {
+                    led2State = !led2State;
+                    StateHasChanged();
+                });
+            }
+            else if (message.StartsWith("METRICS:"))
+            {
+                // Ejemplo: METRICS:MEM=45,TEMP=38.5
+                var metrics = message.Substring(8).Split(',');
+                foreach (var metric in metrics)
+                {
+                    var parts = metric.Split('=');
+                    if (parts.Length == 2)
+                    {
+                        await InvokeAsync(() =>
+                        {
+                            switch (parts[0])
+                            {
+                                case "MEM":
+                                    if (int.TryParse(parts[1], out int mem))
+                                        memoryUsage = mem;
+                                    break;
+                                case "TEMP":
+                                    if (double.TryParse(parts[1], out double temp))
+                                        cpuTemp = temp;
+                                    break;
+                            }
+                            StateHasChanged();
+                        });
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing message: {ex.Message}");
+        }
+    }
+}

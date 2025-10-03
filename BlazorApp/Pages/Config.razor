@@ -1,0 +1,121 @@
+@page "/config"
+@inject HttpClient Http
+@inject IConfiguration Configuration
+
+<PageTitle>Configuración</PageTitle>
+
+<div class="container">
+    <h1><i class="fas fa-cogs"></i> Configuración del Sistema</h1>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h4><i class="fas fa-microchip"></i> Configuración ESP32</h4>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Puerto Serial</label>
+                <select class="form-select" @bind="selectedPort">
+                    @foreach (var port in availablePorts)
+                    {
+                        <option value="@port">@port</option>
+                    }
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Velocidad (Baudrate)</label>
+                <select class="form-select" @bind="selectedBaudRate">
+                    <option value="9600">9600</option>
+                    <option value="115200">115200</option>
+                    <option value="921600">921600</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h4><i class="fas fa-server"></i> Configuración del Servidor</h4>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">URL del API</label>
+                <input type="text" class="form-control" @bind="apiUrl" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Puerto WebSocket</label>
+                <input type="number" class="form-control" @bind="wsPort" />
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end mt-4">
+        <button class="btn btn-secondary me-2" @onclick="LoadDefaults">
+            <i class="fas fa-undo"></i> Valores por Defecto
+        </button>
+        <button class="btn btn-primary" @onclick="SaveConfiguration">
+            <i class="fas fa-save"></i> Guardar Cambios
+        </button>
+    </div>
+</div>
+
+@code {
+    private List<string> availablePorts = new();
+    private string selectedPort = "";
+    private string selectedBaudRate = "115200";
+    private string apiUrl = "http://localhost:5095";
+    private int wsPort = 8000;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Aquí se cargarían los puertos disponibles
+        availablePorts = new List<string> { "COM1", "COM2", "COM3" };
+        await LoadConfiguration();
+    }
+
+    private Task<bool> LoadConfiguration()
+    {
+        try
+        {
+            // Aquí se cargaría la configuración guardada
+            selectedPort = Configuration["SerialPort"] ?? "COM1";
+            selectedBaudRate = Configuration["BaudRate"] ?? "115200";
+            apiUrl = Configuration["ApiUrl"] ?? "http://localhost:5095";
+            wsPort = int.Parse(Configuration["WsPort"] ?? "8000");
+            return Task.FromResult(true);
+        }
+        catch (Exception)
+        {
+            // Log del error o manejo específico
+            return Task.FromResult(false);
+        }
+    }
+
+    private async Task SaveConfiguration()
+    {
+        try
+        {
+            // Simulación de guardado asíncrono
+            await Task.Delay(500);
+            
+            // TODO: Implementar el guardado real de la configuración
+            // await localStorage.SetItemAsync("SerialPort", selectedPort);
+            // await localStorage.SetItemAsync("BaudRate", selectedBaudRate);
+            // await localStorage.SetItemAsync("ApiUrl", apiUrl);
+            // await localStorage.SetItemAsync("WsPort", wsPort.ToString());
+        }
+        catch (Exception)
+        {
+            // Log del error o manejo específico
+            throw;
+        }
+    }
+
+    private Task LoadDefaults()
+    {
+        selectedPort = "COM1";
+        selectedBaudRate = "115200";
+        apiUrl = "http://localhost:5095";
+        wsPort = 8000;
+        return Task.CompletedTask;
+    }
+}

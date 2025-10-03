@@ -1,0 +1,116 @@
+@inject NavigationManager Navigation
+
+<div class="blazor-error-ui" style="display: block;">
+    <div class="error-ui-content">
+        <div class="error-ui-header">
+            <h3><i class="bi bi-exclamation-triangle-fill text-danger"></i> Error</h3>
+        </div>
+        <div class="error-ui-body">
+            @if (Error != null)
+            {
+                <div class="alert alert-danger">
+                    <h5 class="alert-heading">@Error.GetType().Name</h5>
+                    <p>@Error.Message</p>
+                    @if (ShowDetails)
+                    {
+                        <hr>
+                        <pre class="stack-trace">@Error.StackTrace</pre>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    <p>An unhandled error has occurred.</p>
+                </div>
+            }
+            <div class="error-ui-actions">
+                <button class="btn btn-primary" @onclick="Reload">
+                    <i class="bi bi-arrow-clockwise"></i> Reload
+                </button>
+                <button class="btn btn-outline-secondary" @onclick="@(() => ShowDetails = !ShowDetails)">
+                    <i class="bi bi-@(ShowDetails ? "eye-slash" : "eye")"></i>
+                    @(ShowDetails ? "Hide" : "Show") Details
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Exception? Error { get; set; }
+
+    private bool ShowDetails { get; set; }
+
+    private void Reload()
+    {
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+    }
+}
+
+<style>
+    .error-ui {
+        display: none;
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1050;
+        padding: 2rem;
+    }
+
+    .error-ui.show {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .error-ui-content {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 600px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .error-ui-header {
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .error-ui-header h3 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .error-ui-body {
+        padding: 1rem;
+    }
+
+    .error-ui-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .stack-trace {
+        font-size: 0.875rem;
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+</style>
